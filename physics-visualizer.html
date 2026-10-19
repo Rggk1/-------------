@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Визуализатор движения тела</title>
+<style>
+:root{--bg:#f6f5f1;--card:#fff;--tx:#1d1d1b;--mut:#6b6a64;--bd:#dcdad2;--body:#3b6fd4;--f:#d9482b;--v:#1f9d63;--a:#c78a00;--gr:#e9e7df;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#17171a;--card:#212125;--tx:#ecebe6;--mut:#9a998f;--bd:#33333a;--body:#6a9bff;--f:#ff7a5c;--v:#43d391;--a:#f0b429;--gr:#2a2a30}}
+:root[data-theme="dark"]{--bg:#17171a;--card:#212125;--tx:#ecebe6;--mut:#9a998f;--bd:#33333a;--body:#6a9bff;--f:#ff7a5c;--v:#43d391;--a:#f0b429;--gr:#2a2a30}
+*{box-sizing:border-box}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding:16px}
+.wrap{max-width:900px;margin:0 auto}
+h1{font-size:20px;margin:0 0 12px}
+canvas{width:100%;height:260px;display:block;background:var(--card);border:1px solid var(--bd);border-radius:12px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px;margin-top:12px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:12px}
+.row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px}
+label{font-weight:600}
+.u{color:var(--mut);font-size:13px}
+input[type=range]{width:100%}
+input[type=number]{width:96px;padding:4px 6px;border:1px solid var(--bd);border-radius:6px;background:var(--bg);color:var(--tx);font:inherit}
+.btns{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+button{padding:8px 16px;border-radius:8px;border:1px solid var(--bd);background:var(--card);color:var(--tx);font:inherit;cursor:pointer}
+button.p{background:var(--body);border-color:var(--body);color:#fff}
+.out{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:12px;text-align:center}
+.out div{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:8px 4px}
+.out b{display:block;font-size:17px;font-variant-numeric:tabular-nums}
+.out span{font-size:12px;color:var(--mut)}
+.note{color:var(--mut);font-size:13px;margin-top:10px}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:4px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>Визуализатор движения тела</h1>
+<canvas id="c"></canvas>
+<div class="out">
+<div><b id="oT">0.0</b><span>время, с</span></div>
+<div><b id="oX">0.0</b><span>путь x, м</span></div>
+<div><b id="oV">0.0</b><span>скорость, м/с</span></div>
+<div><b id="oA">0.0</b><span>ускорение, м/с²</span></div>
+</div>
+<div class="btns">
+<button class="p" id="go">▶ Старт</button>
+<button id="rs">⟲ Сброс</button>
+</div>
+<div class="grid">
+<div class="card">
+<div class="row"><label for="m"><span class="dot" style="background:var(--body)"></span>Масса</label><span><input type="number" id="mN" min="1" max="1000" step="1"> <span class="u">кг</span></span></div>
+<input type="range" id="m" min="1" max="1000" step="1" value="100">
+<div class="u">1 – 1000 кг</div>
+</div>
+<div class="card">
+<div class="row"><label for="f"><span class="dot" style="background:var(--f)"></span>Сила</label><span><input type="number" id="fN" min="-200" max="200" step="1"> <span class="u">Н</span></span></div>
+<input type="range" id="f" min="-200" max="200" step="1" value="50">
+<div class="u">от −200 до 200 Н (минус — влево)</div>
+</div>
+<div class="card">
+<div class="row"><label for="a"><span class="dot" style="background:var(--a)"></span>Ускорение</label><span><input type="number" id="aN" step="0.01"> <span class="u">м/с²</span></span></div>
+<input type="range" id="a" min="-200" max="200" step="0.01" value="0.5">
+<div class="u" id="aLim"></div>
+</div>
+<div class="card">
+<div class="row"><label for="v"><span class="dot" style="background:var(--v)"></span>Скорость</label><span><input type="number" id="vN" min="-50" max="50" step="0.1"> <span class="u">м/с</span></span></div>
+<input type="range" id="v" min="-50" max="50" step="0.1" value="0">
+<div class="u">можно менять и во время движения</div>
+</div>
+</div>
+<p class="note">Связь величин: a = F / m. Если задать ускорение, сила пересчитается (F = m·a) и не выйдет за ±200 Н. Если масса растёт, предельное ускорение падает. Трения нет.</p>
+</div>
+<script>
+const $=id=>document.getElementById(id);
+const S={m:100,F:50,v:0,x:0,t:0,run:false};
+const cv=$('c'),ctx=cv.getContext('2d');
+const clamp=(x,a,b)=>Math.min(b,Math.max(a,x));
+const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const acc=()=>S.F/S.m;
+
+function sync(src){
+  S.m=clamp(S.m,1,1000);S.F=clamp(S.F,-200,200);S.v=clamp(S.v,-50,50);
+  const lim=200/S.m, a=acc();
+  $('aLim').textContent='при этой массе: от −'+lim.toFixed(2)+' до '+lim.toFixed(2)+' м/с²';
+  $('a').min=-lim;$('a').max=lim;
+  const set=(id,val)=>{if(src!==id)$(id).value=val;if(src!==id+'N')$(id+'N').value=val};
+  set('m',S.m);set('f',S.F);set('v',+S.v.toFixed(1));
+  if(src!=='a')$('a').value=a;
+  if(src!=='aN')$('aN').value=+a.toFixed(3);
+  $('mN').value=S.m;$('fN').value=S.F;$('vN').value=+S.v.toFixed(1);
+  if(src==='v'||src==='vN'){}
+  out();
+}
+function out(){
+  $('oT').textContent=S.t.toFixed(1);$('oX').textContent=S.x.toFixed(1);
+  $('oV').textContent=S.v.toFixed(2);$('oA').textContent=acc().toFixed(3);
+}
+function bind(id,key,fn){
+  ['','N'].forEach(s=>$(id+s).addEventListener('input',e=>{
+    let val=parseFloat(e.target.value); if(isNaN(val))return;
+    fn(val);sync(id+s);draw();
+  }));
+}
+bind('m','m',val=>{S.m=clamp(val,1,1000)});
+bind('f','F',val=>{S.F=clamp(val,-200,200)});
+bind('v','v',val=>{S.v=clamp(val,-50,50)});
+['a','aN'].forEach(id=>$(id).addEventListener('input',e=>{
+  const val=parseFloat(e.target.value); if(isNaN(val))return;
+  S.F=clamp(val*S.m,-200,200);sync(id);draw();
+}));
+['mN','fN','vN','aN'].forEach(id=>$(id).addEventListener('change',()=>{sync();draw()}));
+
+function resize(){
+  const r=cv.getBoundingClientRect(),d=window.devicePixelRatio||1;
+  cv.width=r.width*d;cv.height=r.height*d;ctx.setTransform(d,0,0,d,0,0);draw();
+}
+function arrow(x0,y,len,col,label){
+  if(Math.abs(len)<1)return;
+  const x1=x0+len,s=Math.sign(len);
+  ctx.strokeStyle=col;ctx.fillStyle=col;ctx.lineWidth=3;
+  ctx.beginPath();ctx.moveTo(x0,y);ctx.lineTo(x1,y);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(x1,y);ctx.lineTo(x1-s*9,y-6);ctx.lineTo(x1-s*9,y+6);ctx.closePath();ctx.fill();
+  ctx.font='600 12px system-ui,sans-serif';ctx.textAlign='center';
+  ctx.fillText(label,x0+len/2,y-9);
+}
+function draw(){
+  const W=cv.getBoundingClientRect().width,H=cv.getBoundingClientRect().height;
+  ctx.clearRect(0,0,W,H);
+  const ppm=24,gy=H-60,cx=W/2;
+  // ground and ticks (world scrolls so the body stays centred)
+  ctx.fillStyle=css('--gr');ctx.fillRect(0,gy,W,H-gy);
+  ctx.strokeStyle=css('--mut');ctx.fillStyle=css('--mut');ctx.lineWidth=1;
+  ctx.font='11px system-ui,sans-serif';ctx.textAlign='center';
+  const left=S.x-cx/ppm,right=S.x+cx/ppm;
+  for(let m=Math.floor(left);m<=Math.ceil(right);m++){
+    const px=cx+(m-S.x)*ppm,big=m%5===0;
+    ctx.beginPath();ctx.moveTo(px,gy);ctx.lineTo(px,gy+(big?10:5));ctx.stroke();
+    if(big&&m%10===0)ctx.fillText(m+' м',px,gy+24);
+  }
+  ctx.beginPath();ctx.moveTo(0,gy);ctx.lineTo(W,gy);ctx.stroke();
+  // body: size grows with mass
+  const s=30+Math.cbrt(S.m)*7;
+  const by=gy-s;
+  ctx.fillStyle=css('--body');
+  ctx.beginPath();ctx.roundRect(cx-s/2,by,s,s,6);ctx.fill();
+  ctx.fillStyle='#fff';ctx.font='600 13px system-ui,sans-serif';ctx.textAlign='center';
+  ctx.fillText(S.m+' кг',cx,by+s/2+5);
+  // vectors
+  const cy=by+s/2;
+  arrow(cx,by-14,clamp(S.v*4,-W/2+30,W/2-30),css('--v'),'v');
+  arrow(cx,by-44,S.F*0.6,css('--f'),'F');
+  arrow(cx,by-74,clamp(acc()*60,-W/2+30,W/2-30),css('--a'),'a');
+}
+let last=0;
+function loop(ts){
+  if(S.run){
+    const dt=Math.min((ts-last)/1000,0.05);
+    const a=acc();
+    S.x+=S.v*dt+0.5*a*dt*dt;S.v+=a*dt;S.t+=dt;
+    if(Math.abs(S.v)>=50){S.v=clamp(S.v,-50,50)}
+    $('v').value=S.v;$('vN').value=+S.v.toFixed(1);
+    out();draw();
+  }
+  last=ts;requestAnimationFrame(loop);
+}
+$('go').onclick=()=>{S.run=!S.run;$('go').textContent=S.run?'⏸ Пауза':'▶ Старт'};
+$('rs').onclick=()=>{S.run=false;S.x=0;S.t=0;S.v=0;$('go').textContent='▶ Старт';sync();draw()};
+window.addEventListener('resize',resize);
+sync();resize();requestAnimationFrame(loop);
+</script>
+</body>
+</html>
